@@ -4,7 +4,13 @@
 
 - [Introduction to Computer Systems](#introduction-to-computer-systems)
   - [Course Theme](#course-theme)
-  - [Great Realities](#great-realities) - [1: Ints are not integers, floats are not reals](#1-ints-are-not-integers-floats-are-not-reals) - [2: You've got to know assembly](#2-youve-got-to-know-assembly) - [3: Memory Matters](#3-memory-matters) - [4: There's more to performance than asymptotic complexity](#4-theres-more-to-performance-than-asymptotic-complexity) - [5: Computers do more than execute programs](#5-computers-do-more-than-execute-programs)
+  - [Great Realities](#great-realities)
+    - [1: Ints are not integers, floats are not reals](#1-ints-are-not-integers-floats-are-not-reals)
+    - [2: You've got to know assembly](#2-youve-got-to-know-assembly)
+    - [3: Memory Matters](#3-memory-matters)
+    - [4: There's more to performance than asymptotic complexity](#4-theres-more-to-performance-than-asymptotic-complexity)
+    - [5: Computers do more than execute programs](#5-computers-do-more-than-execute-programs)
+  - [Key abstractions](#key-abstractions)
   <!--toc:end-->
 
 ## Course Theme

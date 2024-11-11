@@ -1,52 +1,56 @@
-/* Display value of fixed point numbers */
-#include <stdlib.h>
+/* Display multiple representations of integer numbers:
+ * - Hexadecimal (8 digits)
+ * - Signed decimal
+ * - Unsigned decimal
+ */
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-/* Extract hex/decimal/or float value from string */
-static int get_num_val(char *sval, unsigned *valp) {
+/* Determines if the input string contains float markers (./e/E) */
+static bool is_float_format(const char *str) {
+  for (int i = 0; str[i]; i++) {
+    if (str[i] == '.' || str[i] == 'e' || str[i] == 'E')
+      return true;
+  }
+  return false;
+}
+
+/* Determines if the input string contains hex markers (x/X) */
+static bool is_hex_format(const char *str) {
+  for (int i = 0; str[i]; i++) {
+    if (str[i] == 'x' || str[i] == 'X')
+      return true;
+  }
+  return false;
+}
+
+/* Extract hex/decimal value from string. Returns true if successful. */
+static bool get_num_val(const char *input_str, unsigned *result) {
   char *endp;
-  /* See if it's an integer or floating point */
-  int ishex = 0;
-  int isfloat = 0;
-  int i;
-  for (i = 0; sval[i]; i++) {
-    switch (sval[i]) {
-    case 'x':
-    case 'X':
-      ishex = 1;
-      break;
-    case 'e':
-    case 'E':
-      if (!ishex)
-	isfloat = 1;
-      break;
-    case '.':
-      isfloat = 1;
-      break;
-    default:
-      break;
-    }
+  /* Reject floating point numbers */
+  if (is_float_format(input_str)) {
+    return false;
   }
-  if (isfloat) {
-    return 0; /* Not supposed to have a float here */
-  } else {
-    long long int llval = strtoll(sval, &endp, 0);
-    long long int upperbits = llval >> 31;
-    /* will give -1 for negative, 0 or 1 for positive */
-    if (valp && (upperbits == 0 || upperbits == -1 || upperbits == 1)) {
-      *valp = (unsigned) llval;
-      return 1;
-    }
-    return 0;
+
+  /* Convert string to number */
+  long long int value = strtoll(input_str, &endp, 0);
+
+  /* Check if number fits in 32 bits */
+  long long int upper_bits = value >> 31;
+  if (!result || (upper_bits != 0 && upper_bits != -1 && upper_bits != 1)) {
+    return false;
   }
+
+  *result = (unsigned)value;
+  return true;
 }
 
-void show_int(unsigned uf)
-{
-  printf("Hex = 0x%.8x,\tSigned = %d,\tUnsigned = %u\n",
-	 uf, (int) uf, uf);
+/* Display a number in hex, signed decimal, and unsigned decimal formats */
+void show_int(unsigned value) {
+  printf("Hex = 0x%.8x,\tSigned = %d,\tUnsigned = %u\n", value, (int)value,
+         value);
 }
-
 
 void usage(char *fname) {
   printf("Usage: %s val1 val2 ...\n", fname);
@@ -54,22 +58,20 @@ void usage(char *fname) {
   exit(0);
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   int i;
   unsigned uf;
-  if (argc < 2)
+  if (argc < 2) {
     usage(argv[0]);
+  }
+
   for (i = 1; i < argc; i++) {
-    char *sval = argv[i];
-    if (get_num_val(sval, &uf)) {
+    const char *input_str = argv[i];
+    if (get_num_val(input_str, &uf)) {
       show_int(uf);
     } else {
-      printf("Cannot convert '%s' to 32-bit number\n", sval);
+      printf("Error: '%s' is not a valid 32-bit integer\n", input_str);
     }
   }
   return 0;
 }
-
-
-
