@@ -146,7 +146,7 @@ int bitXor(int x, int y) {
    * - neither x nor y have the bit set
    * - both x and y have the bit set
    * */
-  return (~(~x & ~y)) & ~(x & y);
+  return (~(~x & ~y)) & (~(x & y));
 }
 /*
  * tmin - return minimum two's complement integer
@@ -166,7 +166,10 @@ int tmin(void) {
  *   Max ops: 10
  *   Rating: 1
  */
-int isTmax(int x) { return !(~(x + 1 + x)) && !!(x + 1); }
+int isTmax(int x) {
+  // works comparing x against tMax's bitfield via the XOR operator
+  return !(x ^ ((1 >> 31) & (1 << 31)));
+}
 /*
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
  *   where bits are numbered from 0 (least significant) to 31 (most significant)
@@ -175,7 +178,7 @@ int isTmax(int x) { return !(~(x + 1 + x)) && !!(x + 1); }
  *   Max ops: 12
  *   Rating: 2
  */
-int allOddBits(int x) { return 2; }
+int allOddBits(int x) { return x & 0xAAAAAAAA; }
 /*
  * negate - return -x
  *   Example: negate(1) = -1.
@@ -183,8 +186,8 @@ int allOddBits(int x) { return 2; }
  *   Max ops: 5
  *   Rating: 2
  */
-int negate(int x) { return 2; }
-// 3
+int negate(int x) { return ~x + 1; }
+
 /*
  * isAsciiDigit - return 1 if 0x30 <= x <= 0x39 (ASCII codes for characters '0'
  * to '9') Example: isAsciiDigit(0x35) = 1. isAsciiDigit(0x3a) = 0.
@@ -193,7 +196,14 @@ int negate(int x) { return 2; }
  *   Max ops: 15
  *   Rating: 3
  */
-int isAsciiDigit(int x) { return 2; }
+int isAsciiDigit(int x) {
+  int lowerBound = x + negate(0x30); // sign bit is 1 if x < 0x30
+  int upperBound = 0x39 + negate(x); // sign bit is 1 if x > 0x39
+  int sign = (lowerBound | upperBound) >>
+             31; // extract sign bit; 1 if at least 1 of the above was
+                 // negative (i.e., outside of range)
+  return !sign;
+}
 /*
  * conditional - same as x ? y : z
  *   Example: conditional(2,4,5) = 4
