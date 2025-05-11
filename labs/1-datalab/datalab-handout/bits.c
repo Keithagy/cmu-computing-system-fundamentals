@@ -168,7 +168,7 @@ int tmin(void) {
  */
 int isTmax(int x) {
   // works comparing x against tMax's bitfield via the XOR operator
-  return !(x ^ ((1 >> 31) & (1 << 31)));
+  return !(x ^ 0x7fffffff);
 }
 /*
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -178,7 +178,7 @@ int isTmax(int x) {
  *   Max ops: 12
  *   Rating: 2
  */
-int allOddBits(int x) { return x & 0xAAAAAAAA; }
+int allOddBits(int x) { return !((x & 0xAAAAAAAA) ^ 0xAAAAAAAA); }
 /*
  * negate - return -x
  *   Example: negate(1) = -1.
@@ -197,8 +197,8 @@ int negate(int x) { return ~x + 1; }
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  int lowerBound = x + negate(0x30); // sign bit is 1 if x < 0x30
-  int upperBound = 0x39 + negate(x); // sign bit is 1 if x > 0x39
+  int lowerBound = x + (~0x30 + 1); // sign bit is 1 if x < 0x30
+  int upperBound = 0x39 + (~x + 1); // sign bit is 1 if x > 0x39
   int sign = (lowerBound | upperBound) >>
              31; // extract sign bit; 1 if at least 1 of the above was
                  // negative (i.e., outside of range)
@@ -211,7 +211,13 @@ int isAsciiDigit(int x) {
  *   Max ops: 16
  *   Rating: 3
  */
-int conditional(int x, int y, int z) { return 2; }
+int conditional(int x, int y, int z) {
+  // solution works because: LHS of expression
+  // If x is 0, LHS evaluates to 0 while RHS evaluates to z
+  // Else, LHS evalutes to y while RHS evalutes to 0
+  int mask = ~(!!x) + 1; // if x == 0, mask is all `1`s; else, mask is all `0`s
+  return (mask & y) | (~mask & z);
+}
 /*
  * isLessOrEqual - if x <= y  then return 1, else return 0
  *   Example: isLessOrEqual(4,5) = 1.
@@ -219,7 +225,26 @@ int conditional(int x, int y, int z) { return 2; }
  *   Max ops: 24
  *   Rating: 3
  */
-int isLessOrEqual(int x, int y) { return 2; }
+
+int isLessOrEqual(int x, int y) {
+  // key insight, if the signs are different, then x is smaller if its sign bit
+  // is set (since that means it's negative), and smaller otherwise
+  int signX = x >> 31;          // 0 or -1
+  int signY = y >> 31;          // 0 or -1
+  int diffSign = signX ^ signY; // -1 if signs differ, else 0
+
+  /* same‑sign: safe to use sign of (x‑y) */
+  int sameSignLess = ((x + (~y + 1)) >> 31) & ~diffSign;
+
+  /* different‑sign: x negative ⇒ true */
+  int diffSignLess = signX & diffSign;
+
+  /* exactly equal */
+  int equal = !(x ^ y); // already 0 / 1
+
+  /* squeeze mask(s) to 0 / 1 and return */
+  return !!(sameSignLess | diffSignLess | equal);
+}
 // 4
 /*
  * logicalNeg - implement the ! operator, using all of
@@ -229,7 +254,10 @@ int isLessOrEqual(int x, int y) { return 2; }
  *   Max ops: 12
  *   Rating: 4
  */
-int logicalNeg(int x) { return 2; }
+int logicalNeg(int x) {
+  // key idea:  x | -x sets the sign bit to 1 UNLESS x is 0
+  return ((x | (~x + 1)) >> 31) + 1;
+}
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
  *  Examples: howManyBits(12) = 5
@@ -242,7 +270,38 @@ int logicalNeg(int x) { return 2; }
  *  Max ops: 90
  *  Rating: 4
  */
-int howManyBits(int x) { return 0; }
+int howManyBits(int x) {
+  int signMask = x >> 31; // if neg, `1..1`, else `0..0`
+
+  // flip bits of x if x is negative so we always look for first bit
+  x = signMask ^ x;
+
+  // use binary search to find first set bit
+  int b16, b8, b4, b2, b1, b0;
+
+  // remember we have made sign bit 0 through earlier normalization step
+  // `isTop16BitsZero` has value 0 if top 16 bits are 0, else 1
+  int isTop16BitsZero = !!(x >> 16);
+  b16 = isTop16BitsZero << 4; // takes value 0 or 16
+  x >>= b16; // shift x right by 0 if top 16 bits unset, or 16 otherwise
+
+  b8 = !!(x >> 8) << 3; /* 0 or 8                      */
+  x >>= b8;
+
+  b4 = !!(x >> 4) << 2; /* 0 or 4                      */
+  x >>= b4;
+
+  b2 = !!(x >> 2) << 1; /* 0 or 2                      */
+  x >>= b2;
+
+  b1 = !!(x >> 1); /* 0 or 1                      */
+  x >>= b1;
+
+  b0 = x; /* 0 or 1 (now the LSB)        */
+
+  /* Step 3: total bits found +1 for the sign bit                  */
+  return b16 + b8 + b4 + b2 + b1 + b0 + 1;
+}
 // float
 /*
  * floatScale2 - Return bit-level equivalent of expression 2*f for
@@ -255,7 +314,33 @@ int howManyBits(int x) { return 0; }
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned floatScale2(unsigned uf) { return 2; }
+unsigned floatScale2(unsigned uf) {
+  unsigned expMask = 0x7f800000;
+  unsigned signMask = 0x80000000;
+  unsigned mantissaMask = ~(expMask | signMask);
+
+  // first: check if `uf` is edge-case (exp is `1..1`)
+  unsigned exp = uf & expMask;
+  if (!(exp ^ expMask)) {
+    return uf;
+  }
+  // second: check if `uf` is denormalized
+  unsigned sign = uf & signMask;
+  if (!exp) {
+    unsigned nonSign = uf & ~signMask;
+    return sign | (nonSign << 1);
+  }
+  // if we get here, `uf` is normalized; scale 2 by adding 1 to exp
+  unsigned newExp = exp + (1 << 23);
+
+  // if scalling results in `newExp` of `1..1` mantissa should be set to 0 to
+  // encode +/-`inf`
+  if (!(newExp ^ expMask)) {
+    return sign | expMask;
+  }
+  unsigned mantissa = uf & mantissaMask;
+  return sign | newExp | mantissa; // return result
+}
 /*
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
  *   for floating point argument f.
@@ -268,7 +353,43 @@ unsigned floatScale2(unsigned uf) { return 2; }
  *   Max ops: 30
  *   Rating: 4
  */
-int floatFloat2Int(unsigned uf) { return 2; }
+int floatFloat2Int(unsigned uf) {
+  const unsigned EXP_MASK = 0x7f800000;
+  const unsigned SIGN_MASK = 0x80000000;
+  const unsigned FRAC_MASK = 0x007fffff;
+  const unsigned INT_MIN_U = 0x80000000u;
+  const unsigned INT_MAX_U = 0x7fffffffu;
+
+  unsigned exp = uf & EXP_MASK;
+  unsigned sign = uf & SIGN_MASK;
+
+  /* 1.  NaN / ±∞  ----------------------------------------------------- */
+  if (exp == EXP_MASK) /* all 1s in exponent field   */
+  {
+    unsigned frac = uf & FRAC_MASK;
+    if (frac == 0) {
+      // infinity
+      return sign ? INT_MIN_U : INT_MAX_U; /*  –∞ ⇒ INT_MIN, +∞/NaN ⇒ MAX */
+    }
+    // NaN
+    return 0;
+  }
+  /* 2.  Unbias the exponent                                            */
+  int E = (int)(exp >> 23) - 127; /* true exponent              */
+  if (E < 0)                      /* |f| < 1  (incl. denormals) */
+    return 0;
+
+  /* 3.  Overflow check (E ≥ 31 ⇒ |value| ≥ 2³¹) ----------------------- */
+  if (E >= 31)                           /* cannot fit into 32‑bit int */
+    return sign ? INT_MIN_U : INT_MAX_U; /* saturate ↑/↓ accordingly   */
+
+  /* 4.  Build the integer value                                        */
+  unsigned mant = (1 << 23) | (uf & FRAC_MASK);
+  unsigned val = (E >= 23) ? mant << (E - 23) : mant >> (23 - E);
+
+  /* 5.  Apply sign and return                                          */
+  return sign ? -(int)val : (int)val;
+}
 /*
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
  *   (2.0 raised to the power x) for any 32-bit integer x.
@@ -282,4 +403,23 @@ int floatFloat2Int(unsigned uf) { return 2; }
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned floatPower2(int x) { return 2; }
+unsigned floatPower2(int x) {
+  // denorm smallest E: -126
+  // smallest non-zero float: (+/-1) * (2^-23) * 2^-126
+  // i.e., +/-2^-149
+  if (x < -149) {
+    // too small to be represented as a denorm
+    return 0;
+  }
+  if (x >= -149 && x < -126) {
+    // can fit in denorm representation
+    return (1 << (x + 149));
+  }
+  // values of x -126 and above require normalized representation
+  // check if x overflows
+  if (x > 127) {
+    return 0x7f800000; // +inf
+  }
+  unsigned biasedExp = x + 127;
+  return biasedExp << 23;
+}
